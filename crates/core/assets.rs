@@ -1,9 +1,11 @@
+use ipnet::{self, IpNet};
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::{fs::OpenOptions, path::Path};
+use url;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Assets {
     ips: HashSet<String>,
     domains: HashSet<String>,
@@ -15,10 +17,15 @@ impl TryFrom<Vec<String>> for Assets {
     type Error = Box<dyn std::error::Error>;
 
     fn try_from(value: Vec<String>) -> Result<Self> {
-        Ok(Self {
-            ips: HashSet::from_iter(value),
-            domains: HashSet::new(),
-        })
+        let mut assests = Self::default();
+        for val in value {
+            if val.parse::<IpNet>().is_ok() || val.parse::<std::net::IpAddr>().is_ok() {
+                assests.ips.insert(val);
+            } else if url::Host::parse(&val).is_ok() {
+                assests.domains.insert(val);
+            }
+        }
+        Ok(assests)
     }
 }
 

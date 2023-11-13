@@ -11,6 +11,8 @@ clap = { version = "*", features = [
     "color",
     "wrap_help",
 ] }
+ipnet = "*"
+url = "*"
 
 
 [workspace]
