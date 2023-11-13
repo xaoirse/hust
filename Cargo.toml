@@ -1,0 +1,25 @@
+[package]
+name = "hust"
+version = "0.0.1"
+edition = "2021"
+
+
+[dependencies]
+clap = { version = "*", features = [
+    "derive",
+    "suggestions",
+    "color",
+    "wrap_help",
+] }
+
+
+[workspace]
+
+[[test]]
+name = "first"
+path = "tests/first.rs"
+
+[[bin]]
+bench = false
+path = "crates/core/main.rs"
+name = "hust"
