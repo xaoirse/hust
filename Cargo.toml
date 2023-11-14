@@ -11,11 +11,12 @@ clap = { version = "*", features = [
     "color",
     "wrap_help",
 ] }
-ipnet = "*"
+cidr-utils = "*"
 url = "*"
-
+database = { version = "*", path = "crates/database" }
 
 [workspace]
+members = ["crates/database"]
 
 [[test]]
 name = "first"
