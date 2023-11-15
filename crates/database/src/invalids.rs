@@ -6,7 +6,7 @@ pub fn save_as<P>(assets: HashSet<String>, dir: P) -> Result<HashSet<String>>
 where
     P: AsRef<Path>,
 {
-    let path = dir.as_ref().join("domain");
+    let path = dir.as_ref().join("invalids");
 
     let mut unique_lines = file::unique_lines(&path)?;
     let news = &assets - &unique_lines;

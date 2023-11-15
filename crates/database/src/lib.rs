@@ -1,33 +1,35 @@
 mod domain;
 mod file;
+mod invalids;
 mod ip;
 mod log;
 
+use addr::parse_dns_name;
 use std::collections::HashSet;
 use std::path::Path;
-use url;
 
 #[derive(Debug, Default)]
 pub struct DataBase {
     ips: HashSet<String>,
     domains: HashSet<String>,
+    invalids: HashSet<String>,
 }
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-impl TryFrom<Vec<String>> for DataBase {
-    type Error = Box<dyn std::error::Error>;
-
-    fn try_from(value: Vec<String>) -> Result<Self> {
+impl From<Vec<String>> for DataBase {
+    fn from(value: Vec<String>) -> Self {
         let mut assests = Self::default();
         for val in value {
             if val.parse::<cidr_utils::cidr::IpCidr>().is_ok() {
                 assests.ips.insert(val);
-            } else if url::Host::parse(&val).is_ok() {
+            } else if parse_dns_name(&val).is_ok_and(|n| n.is_icann()) {
                 assests.domains.insert(val);
+            } else {
+                assests.invalids.insert(val);
             }
         }
-        Ok(assests)
+        assests
     }
 }
 
@@ -38,7 +40,13 @@ impl DataBase {
     {
         std::fs::create_dir_all(&path)?;
 
-        ip::save_as(self.ips, &path).and(domain::save_as(self.domains, &path))
+        let mut result = HashSet::new();
+
+        result.extend(ip::save_as(self.ips, &path)?);
+        result.extend(domain::save_as(self.domains, &path)?);
+        result.extend(invalids::save_as(self.invalids, &path)?);
+
+        Ok(result)
     }
 }
 

@@ -1,32 +1,30 @@
-use crate::{file, Result};
+use crate::{file, invalids, Result};
 use cidr_utils::{cidr::Ipv4Cidr, utils::Ipv4CidrCombiner};
-use std::{collections::HashSet, io::BufWriter, io::Write, path::Path};
+use std::{collections::HashSet, path::Path};
 
-pub fn save_as<P>(assets: HashSet<String>, path: P) -> Result<HashSet<String>>
+pub fn save_as<P>(assets: HashSet<String>, dir: P) -> Result<HashSet<String>>
 where
     P: AsRef<Path>,
 {
-    let (file, unique_lines) = file::unique_lines(path.as_ref().join("ip"))?;
+    let path = dir.as_ref().join("ip");
 
+    let unique_lines = file::unique_lines(&path)?;
+    let mut invalids = HashSet::new();
     let mut combiner = Ipv4CidrCombiner::new();
 
-    for l in &unique_lines {
-        combiner.push(Ipv4Cidr::from_str(l)?);
+    let news = &assets - &unique_lines;
+
+    for s in unique_lines.into_iter().chain(assets.into_iter()) {
+        match Ipv4Cidr::from_str(&s) {
+            Ok(ip) => combiner.push(ip),
+            Err(_) => {
+                invalids.insert(s);
+            }
+        }
     }
-    for l in &assets {
-        combiner.push(Ipv4Cidr::from_str(l)?);
-    }
 
-    // Truncate the file to remove any duplicate lines.
-    file.set_len(0)?;
+    invalids::save_as(invalids, dir)?;
+    file::save(combiner, &path)?;
 
-    // Write the unique lines back to the file.
-    let mut writer = BufWriter::new(file);
-
-    combiner
-        .iter()
-        .map(|line| write!(writer, "{}\n", line).map_err(|err| err.into()))
-        .collect::<Result<()>>()?;
-
-    Ok(&assets - &unique_lines)
+    Ok(news)
 }

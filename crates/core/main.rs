@@ -14,13 +14,15 @@ fn main() {
     // Check if somthing is piped or not
     if !std::io::stdin().is_terminal() {
         let mut buf = String::new();
-        std::io::stdin().read_to_string(&mut buf).unwrap();
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .expect("Can't read from Stdin");
         let buf: Vec<_> = buf.split_whitespace().map(str::to_string).collect();
         args.args.extend(buf);
     }
 
     match try_main(args) {
-        Ok(result) => println!("{result}"),
+        Ok(result) => print!("{result}"),
         Err(err) => {
             eprintln!("{err}");
             std::process::exit(2);
@@ -39,16 +41,18 @@ fn try_main(args: Args) -> Result<String> {
 }
 
 fn status(_args: Args) -> Result<String> {
-    todo!()
+    todo!("Status")
 }
 fn search(_args: Args) -> Result<String> {
-    todo!()
+    todo!("Search")
 }
 
 fn insert(args: Args) -> Result<String> {
     let path = args.name.unwrap();
 
-    db::try_from(args.args)?.save_as(&path)?;
-
-    Ok("Done".into())
+    Ok(db::from(args.args)
+        .save_as(&path)?
+        .into_iter()
+        .collect::<Vec<String>>()
+        .join("\n"))
 }
