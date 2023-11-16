@@ -1,4 +1,4 @@
-use crate::{file, invalids, Result};
+use crate::{file, invalid, Result};
 use cidr_utils::{cidr::Ipv4Cidr, utils::Ipv4CidrCombiner};
 use std::{collections::HashSet, path::Path};
 
@@ -23,7 +23,7 @@ where
         }
     }
 
-    invalids::save_as(invalids, dir)?;
+    invalid::save_as(invalids, dir)?;
     file::save(combiner, &path)?;
 
     Ok(news)

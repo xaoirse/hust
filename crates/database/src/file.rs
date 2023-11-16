@@ -73,6 +73,5 @@ where
     let mut writer = BufWriter::new(file);
 
     iter.into_iter()
-        .map(|line| write!(writer, "{}\n", line).map_err(|err| err.into()))
-        .collect::<Result<()>>()
+        .try_for_each(|line| writeln!(writer, "{}", line).map_err(|err| err.into()))
 }

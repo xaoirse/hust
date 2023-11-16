@@ -1,7 +1,10 @@
-mod args;
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-use args::Args;
+mod cli;
+
 use clap::Parser;
+use cli::Cli;
 use database::DataBase as db;
 use std::io::{IsTerminal, Read};
 
@@ -9,7 +12,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn main() {
     // Parse CLI Parameters
-    let mut args = Args::parse();
+    let mut cli = Cli::parse();
 
     // Check if somthing is piped or not
     if !std::io::stdin().is_terminal() {
@@ -18,10 +21,10 @@ fn main() {
             .read_to_string(&mut buf)
             .expect("Can't read from Stdin");
         let buf: Vec<_> = buf.split_whitespace().map(str::to_string).collect();
-        args.args.extend(buf);
+        cli.args.extend(buf);
     }
 
-    match try_main(args) {
+    match try_main(cli) {
         Ok(result) => print!("{result}"),
         Err(err) => {
             eprintln!("{err}");
@@ -30,27 +33,31 @@ fn main() {
     }
 }
 
-fn try_main(args: Args) -> Result<String> {
-    if args.name.is_none() {
-        status(args)
-    } else if args.args.len().eq(&0) {
-        search(args)
+fn try_main(cli: Cli) -> Result<String> {
+    if let Some(path) = &cli.path {
+        database::set_path(path)?;
+    };
+
+    if cli.name.is_none() {
+        status(cli)
+    } else if cli.args.len().eq(&0) {
+        search(cli)
     } else {
-        insert(args)
+        insert(cli)
     }
 }
 
-fn status(_args: Args) -> Result<String> {
+fn status(_cli: Cli) -> Result<String> {
     todo!("Status")
 }
-fn search(_args: Args) -> Result<String> {
+fn search(_cli: Cli) -> Result<String> {
     todo!("Search")
 }
 
-fn insert(args: Args) -> Result<String> {
-    let path = args.name.unwrap();
+fn insert(cli: Cli) -> Result<String> {
+    let path = cli.name.unwrap();
 
-    Ok(db::from(args.args)
+    Ok(db::from(cli.args)
         .save_as(&path)?
         .into_iter()
         .collect::<Vec<String>>()
