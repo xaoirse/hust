@@ -2,7 +2,7 @@ use std::{
     collections::HashSet,
     fmt::Display,
     fs::OpenOptions,
-    io::{BufRead, BufReader, BufWriter, Write},
+    io::{BufRead, BufReader, BufWriter, Read, Seek, Write},
     ops::Deref,
     path::Path,
 };
@@ -29,29 +29,6 @@ where
     Ok(unique_lines)
 }
 
-/// ## [Method-call expressions](https://doc.rust-lang.org/stable/reference/expressions/method-call-expr.html#method-call-expressions)
-///
-/// > ...For instance, if the receiver has type Box<[i32;2]>,
-/// > then the candidate types will be Box<[i32;2]>, &Box<[i32;2]>, &mut Box<[i32;2]>...
-///
-/// So, here we want (&V).into_iter(), we write bellow code and it
-/// automatically dereferenced or borrowed in order to call a method.
-///
-/// For example: `(*iter).into_iter()` it works.
-/// And this example too:
-/// ```
-/// fn show<I, D>(iter: D)
-/// where
-///     D: Deref<Target = I>,
-///     for<'a> &'a &'a &'a I: IntoIterator<Item = &'a &'a String>,
-/// {
-///     (&&(*iter)).into_iter()
-/// }
-/// ```
-/// But not
-/// ```
-///     (&(*iter)).into_iter()
-/// ```
 pub fn save<I, P, T, V>(iter: I, path: P) -> Result<()>
 where
     I: Deref<Target = V>,
@@ -61,17 +38,85 @@ where
     P: AsRef<Path>,
 {
     let file = OpenOptions::new()
-        .read(true)
-        .create(true)
-        .append(true)
+        .truncate(true)
+        .write(true)
         .open(path)
         .unwrap();
-
-    // Truncate the file to remove any duplicate lines.
-    file.set_len(0)?;
 
     let mut writer = BufWriter::new(file);
 
     iter.into_iter()
         .try_for_each(|line| writeln!(writer, "{}", line).map_err(|err| err.into()))
+}
+
+pub fn append<I, P, T, V>(iter: I, path: P) -> Result<()>
+where
+    I: Deref<Target = V>,
+
+    for<'a> &'a V: IntoIterator<Item = &'a T>,
+    T: Display,
+    P: AsRef<Path>,
+{
+    let mut file = OpenOptions::new()
+        .read(true)
+        .append(true)
+        .open(path)
+        .unwrap();
+
+    let mut buf = [0; 1];
+
+    if file.seek(std::io::SeekFrom::End(-1)).is_ok()
+        && file.read_exact(&mut buf).is_ok()
+        && buf[0] != b'\n'
+    {
+        file.write_all(b"\n")?;
+    }
+
+    let mut writer = BufWriter::new(file);
+
+    iter.into_iter()
+        .try_for_each(|line| writeln!(writer, "{}", line).map_err(|err| err.into()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn append_1() {
+        let path = "/tmp/hust.test";
+        let mut file = OpenOptions::new()
+            .truncate(true)
+            .write(true)
+            .create(true)
+            .open(path)
+            .unwrap();
+
+        file.write_all(b"a").unwrap();
+
+        super::append(&["b"], path).unwrap();
+
+        let file = std::fs::read_to_string(path).unwrap();
+
+        assert_eq!(file, "a\nb\n");
+    }
+
+    #[test]
+    fn append_2() {
+        let path = "/tmp/hust.test";
+        let mut file = OpenOptions::new()
+            .truncate(true)
+            .write(true)
+            .create(true)
+            .open(path)
+            .unwrap();
+
+        file.write_all(b"a\n").unwrap();
+
+        super::append(&["b"], path).unwrap();
+
+        let file = std::fs::read_to_string(path).unwrap();
+
+        assert_eq!(file, "a\nb\n");
+    }
 }
