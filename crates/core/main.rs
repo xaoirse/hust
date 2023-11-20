@@ -1,31 +1,33 @@
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-mod cli;
+mod config;
+mod database;
+mod file;
+mod notification;
 
-use clap::Parser;
-use cli::Cli;
 use database::DataBase as db;
-use std::io::{IsTerminal, Read};
+
+use config::Config;
+use notification::send_notification;
+use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-fn main() {
-    // Parse CLI Parameters
-    let mut cli = Cli::parse();
+#[tokio::main]
+async fn main() {
+    let cfg = Config::parse();
 
-    // Check if somthing is piped or not
-    if !std::io::stdin().is_terminal() {
-        let mut buf = String::new();
-        std::io::stdin()
-            .read_to_string(&mut buf)
-            .expect("Can't read from Stdin");
-        let buf: Vec<_> = buf.split_whitespace().map(str::to_string).collect();
-        cli.args.extend(buf);
-    }
+    let quiet = cfg.quiet;
 
-    match try_main(cli) {
-        Ok(result) => print!("{result}"),
+    set_path(&cfg.path).unwrap();
+
+    match run(cfg).await {
+        Ok(result) => {
+            if !quiet {
+                print!("{}", result.trim());
+            }
+        }
         Err(err) => {
             eprintln!("{err}");
             std::process::exit(2);
@@ -33,33 +35,60 @@ fn main() {
     }
 }
 
-fn try_main(cli: Cli) -> Result<String> {
-    if let Some(path) = &cli.path {
-        database::set_path(path)?;
-    };
+async fn run(cfg: Config) -> Result<String> {
+    if let Some(name) = &cfg.name {
+        if cfg.args.len().eq(&0) {
+            search(name)
+        } else {
+            match insert(cfg.path.join(name), cfg.args) {
+                Ok(result) => {
+                    if result.trim().is_empty() {
+                        return Ok(result);
+                    }
 
-    if cli.name.is_none() {
-        status(cli)
-    } else if cli.args.len().eq(&0) {
-        search(cli)
+                    let logs: Vec<String> = result
+                        .lines()
+                        .map(|line| {
+                            let str = format!("{} {}", line, chrono::Local::now());
+                            str
+                        })
+                        .collect();
+
+                    file::append(&logs, cfg.path.join(name).join("hust.log"))?;
+
+                    if let Err(err) = send_notification(
+                        cfg.webhooks,
+                        format!("## {}:\n{result}", cfg.name.unwrap_or_default()),
+                    )
+                    .await
+                    {
+                        eprintln!("{err}");
+                    }
+                    Ok(result)
+                }
+                Err(err) => Err(err),
+            }
+        }
     } else {
-        insert(cli)
+        status()
     }
 }
 
-fn status(_cli: Cli) -> Result<String> {
-    todo!("Status")
+fn status() -> Result<String> {
+    Ok("Hello World!".to_string())
 }
-fn search(_cli: Cli) -> Result<String> {
+fn search(_str: &str) -> Result<String> {
     todo!("Search")
 }
 
-fn insert(cli: Cli) -> Result<String> {
-    let path = cli.name.unwrap();
-
-    Ok(db::from(cli.args)
-        .save_as(&path)?
+fn insert(path: PathBuf, args: Vec<String>) -> Result<String> {
+    Ok(db::from(args)
+        .save(path)?
         .into_iter()
         .collect::<Vec<String>>()
         .join("\n"))
+}
+
+pub fn set_path(path: &Path) -> Result<()> {
+    file::save("./.hust.cfg", &[path.to_str().unwrap_or_default()])
 }

@@ -16,6 +16,7 @@ where
     // Create a hash set to store the unique lines in the file.
     let mut unique_lines = HashSet::new();
 
+    // If file exists read file else return empty HashSet
     if let Ok(file) = OpenOptions::new().read(true).open(path) {
         // Read the file and add each line to the hash set.
         let mut reader = BufReader::new(&file);
@@ -29,7 +30,7 @@ where
     Ok(unique_lines)
 }
 
-pub fn save<I, P, T, V>(iter: I, path: P) -> Result<()>
+pub fn save<I, P, T, V>(path: P, iter: I) -> Result<()>
 where
     I: Deref<Target = V>,
 
@@ -40,6 +41,7 @@ where
     let file = OpenOptions::new()
         .truncate(true)
         .write(true)
+        .create(true)
         .open(path)
         .unwrap();
 
@@ -60,6 +62,7 @@ where
     let mut file = OpenOptions::new()
         .read(true)
         .append(true)
+        .create(true)
         .open(path)
         .unwrap();
 
