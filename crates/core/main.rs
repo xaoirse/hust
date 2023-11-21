@@ -6,11 +6,14 @@ mod database;
 mod file;
 mod notification;
 
-use config::Config;
+use config::{Config, Find, Sub};
 use database::DataBase as db;
 use notification::send_notification;
 
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -18,15 +21,11 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 async fn main() {
     let cfg = Config::parse();
 
-    let quiet = cfg.quiet;
-
     set_path(&cfg.path).unwrap();
 
     match run(cfg).await {
         Ok(result) => {
-            if !quiet {
-                print!("{}", result.trim());
-            }
+            print!("{}", result.trim());
         }
         Err(err) => {
             eprintln!("{err}");
@@ -36,9 +35,12 @@ async fn main() {
 }
 
 async fn run(cfg: Config) -> Result<String> {
+    if let Some(Sub::Find(find)) = cfg.find {
+        return search(&find, &cfg.path);
+    }
     if let Some(name) = &cfg.name {
         if cfg.args.len().eq(&0) {
-            search(name)
+            search(&Find::from(name), &cfg.path)
         } else {
             match insert(cfg.path.join(name), cfg.args) {
                 Ok(result) => {
@@ -56,14 +58,17 @@ async fn run(cfg: Config) -> Result<String> {
 
                     file::append(&logs, cfg.path.join("hust.log"))?;
 
-                    if let Err(err) = send_notification(
-                        cfg.webhooks,
-                        format!("## {}:\n{result}", cfg.name.unwrap_or_default()),
-                    )
-                    .await
-                    {
-                        eprintln!("{err}");
+                    if !cfg.notification {
+                        if let Err(err) = send_notification(
+                            cfg.webhooks,
+                            format!("## {}:\n{result}", cfg.name.unwrap_or_default()),
+                        )
+                        .await
+                        {
+                            eprintln!("{err}");
+                        }
                     }
+
                     Ok(result)
                 }
                 Err(err) => Err(err),
@@ -75,10 +80,59 @@ async fn run(cfg: Config) -> Result<String> {
 }
 
 fn status() -> Result<String> {
-    Ok("Hello World!".to_string())
+    Ok("HOW YOU LIKE THAT?".to_string())
 }
-fn search(_str: &str) -> Result<String> {
-    todo!("Search")
+fn search(find: &Find, path: &Path) -> Result<String> {
+    let mut key = "";
+    let mut args = find.args.as_slice();
+
+    if let Some((first, rest)) = find.args.split_first() {
+        if first == "ip" || first == "domain" || first == "other" {
+            key = first;
+            args = rest;
+        }
+    }
+
+    let mut result: Vec<String> = Vec::new();
+
+    fs::read_dir(path)?
+        .filter_map(|d| d.ok())
+        .filter(|d| {
+            if let Some(p) = &find.program {
+                d.file_name().to_string_lossy().contains(p)
+            } else {
+                true
+            }
+        })
+        .for_each(|d| {
+            let program = d.file_name();
+
+            if let Ok(d) = fs::read_dir(d.path()) {
+                d.filter_map(|d| d.ok())
+                    .filter(|d| {
+                        if key.is_empty() {
+                            true
+                        } else {
+                            d.file_name().to_string_lossy().eq(key)
+                        }
+                    })
+                    .filter_map(|d| fs::read_to_string(d.path()).ok())
+                    .for_each(|s| {
+                        s.lines()
+                            .filter(|l| args.is_empty() || args.iter().any(|arg| l.contains(arg)))
+                            .for_each(|l| {
+                                let l = if find.verbose == 0 {
+                                    l.trim().to_string()
+                                } else {
+                                    format!("{} | {}", program.to_string_lossy(), l.trim())
+                                };
+                                result.push(l);
+                            });
+                    })
+            }
+        });
+
+    Ok(result.join("\n"))
 }
 
 fn insert(path: PathBuf, args: Vec<String>) -> Result<String> {

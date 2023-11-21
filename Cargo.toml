@@ -18,6 +18,8 @@ addr = "*"
 openssl = { version = "*", features = ["vendored"] }
 reqwest = { version = "*", features = ["json"] }
 chrono = "*"
+grep = "*"
+rayon = "*"
 
 [workspace]
 

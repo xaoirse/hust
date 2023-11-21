@@ -2,6 +2,7 @@ use crate::file;
 
 use addr::parse_dns_name;
 use cidr_utils::{cidr::IpCidr, utils::IpCidrCombiner};
+use clap::ArgEnum;
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
@@ -17,7 +18,7 @@ pub struct DataBase {
 impl Default for DataBase {
     fn default() -> Self {
         let mut hm = HashMap::new();
-        hm.insert(Key::IpCidr, HashSet::new());
+        hm.insert(Key::Ip, HashSet::new());
         hm.insert(Key::Domain, HashSet::new());
         hm.insert(Key::Other, HashSet::new());
         Self { rows: hm }
@@ -35,9 +36,9 @@ impl From<Vec<String>> for DataBase {
     }
 }
 
-#[derive(Debug, Eq, Hash, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, Hash, PartialEq, Clone, Copy, ArgEnum)]
 pub enum Key {
-    IpCidr,
+    Ip,
     Domain,
     Other,
 }
@@ -45,7 +46,7 @@ pub enum Key {
 impl<T: AsRef<str>> From<T> for Key {
     fn from(value: T) -> Self {
         if value.as_ref().parse::<IpCidr>().is_ok() {
-            Key::IpCidr
+            Key::Ip
         } else if parse_dns_name(value.as_ref()).is_ok_and(|n| n.is_icann()) {
             Key::Domain
         } else {
@@ -57,7 +58,7 @@ impl<T: AsRef<str>> From<T> for Key {
 impl AsRef<Path> for Key {
     fn as_ref(&self) -> &Path {
         match self {
-            Key::IpCidr => Path::new("ip"),
+            Key::Ip => Path::new("ip"),
             Key::Domain => Path::new("domain"),
             Key::Other => Path::new("other"),
         }
@@ -102,7 +103,7 @@ impl DataBase {
         for (key, cli_row) in other.rows {
             let file_row = self.rows.get_mut(&key).unwrap();
 
-            if key != Key::IpCidr {
+            if key != Key::Ip {
                 new.extend(&cli_row - &file_row);
                 file_row.extend(cli_row);
             } else {
