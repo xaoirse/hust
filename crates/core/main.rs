@@ -12,19 +12,19 @@ use notification::send_notification;
 
 use rayon::prelude::*;
 use std::{
+    error::Error,
     fs,
     path::{Path, PathBuf},
 };
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let cfg = Config::parse();
 
     set_path(&cfg.path).unwrap();
 
-    match run(cfg).await {
+    match run(cfg) {
         Ok(result) => {
             print!("{}", result.trim());
         }
@@ -35,7 +35,7 @@ async fn main() {
     }
 }
 
-async fn run(cfg: Config) -> Result<String> {
+fn run(cfg: Config) -> Result<String> {
     if let Some(Sub::Find(find)) = cfg.find {
         return search(&find, &cfg.path);
     }
@@ -49,12 +49,11 @@ async fn run(cfg: Config) -> Result<String> {
                         return Ok(result);
                     }
 
+                    // Prepare results for append to hust.log
+                    let time = chrono::Local::now();
                     let logs: Vec<String> = result
                         .lines()
-                        .map(|line| {
-                            let str = format!("{} | {} | {}", name, line, chrono::Local::now());
-                            str
-                        })
+                        .map(|line| format!("{} | {} | {}", name, line, time))
                         .collect();
 
                     file::append(&logs, cfg.path.join("hust.log"))?;
@@ -63,9 +62,7 @@ async fn run(cfg: Config) -> Result<String> {
                         if let Err(err) = send_notification(
                             cfg.webhooks,
                             format!("## {}:\n{result}", cfg.name.unwrap_or_default()),
-                        )
-                        .await
-                        {
+                        ) {
                             eprintln!("{err}");
                         }
                     }

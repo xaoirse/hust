@@ -5,7 +5,6 @@ edition = "2021"
 
 
 [dependencies]
-tokio = { version = "1.12.0", features = ["full"] }
 tikv-jemallocator = "0.5.0"
 clap = { version = "*", features = [
     "derive",
@@ -16,7 +15,7 @@ clap = { version = "*", features = [
 cidr-utils = "*"
 addr = "*"
 openssl = { version = "*", features = ["vendored"] }
-reqwest = { version = "*", features = ["json"] }
+reqwest = { version = "*", features = ["blocking", "json"] }
 chrono = "*"
 grep = "*"
 rayon = "*"
@@ -38,6 +37,5 @@ opt-level = 0
 [profile.release]
 opt-level = 3
 strip = true
-lto = true
 panic = "abort"
 codegen-units = 1
