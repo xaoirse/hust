@@ -10,6 +10,7 @@ use config::{Config, Find, Sub};
 use database::DataBase as db;
 use notification::send_notification;
 
+use rayon::prelude::*;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -93,9 +94,8 @@ fn search(find: &Find, path: &Path) -> Result<String> {
         }
     }
 
-    let mut result: Vec<String> = Vec::new();
-
-    fs::read_dir(path)?
+    let result: Vec<String> = fs::read_dir(path)?
+        .par_bridge()
         .filter_map(|d| d.ok())
         .filter(|d| {
             if let Some(p) = &find.program {
@@ -104,33 +104,42 @@ fn search(find: &Find, path: &Path) -> Result<String> {
                 true
             }
         })
-        .for_each(|d| {
+        .filter_map(|d| {
             let program = d.file_name();
 
             if let Ok(d) = fs::read_dir(d.path()) {
-                d.filter_map(|d| d.ok())
-                    .filter(|d| {
-                        if key.is_empty() {
-                            true
-                        } else {
-                            d.file_name().to_string_lossy().eq(key)
-                        }
-                    })
-                    .filter_map(|d| fs::read_to_string(d.path()).ok())
-                    .for_each(|s| {
-                        s.lines()
-                            .filter(|l| args.is_empty() || args.iter().any(|arg| l.contains(arg)))
-                            .for_each(|l| {
-                                let l = if find.verbose == 0 {
-                                    l.trim().to_string()
-                                } else {
-                                    format!("{} | {}", program.to_string_lossy(), l.trim())
-                                };
-                                result.push(l);
-                            });
-                    })
+                Some(
+                    d.par_bridge()
+                        .filter_map(|d| d.ok())
+                        .filter(|d| {
+                            if key.is_empty() {
+                                true
+                            } else {
+                                d.file_name().to_string_lossy().eq(key)
+                            }
+                        })
+                        .filter_map(|d| fs::read_to_string(d.path()).ok())
+                        .flat_map(move |s| {
+                            s.par_lines()
+                                .filter(|l| {
+                                    args.is_empty() || args.par_iter().any(|arg| l.contains(arg))
+                                })
+                                .map(|l| {
+                                    if find.verbose == 0 {
+                                        l.trim().to_string()
+                                    } else {
+                                        format!("{} | {}", program.to_string_lossy(), l.trim())
+                                    }
+                                })
+                                .collect::<Vec<String>>()
+                        }),
+                )
+            } else {
+                None
             }
-        });
+        })
+        .flatten()
+        .collect();
 
     Ok(result.join("\n"))
 }
