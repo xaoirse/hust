@@ -6,10 +6,10 @@ mod database;
 mod file;
 mod notification;
 
-use database::DataBase as db;
-
 use config::Config;
+use database::DataBase as db;
 use notification::send_notification;
+
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -49,12 +49,12 @@ async fn run(cfg: Config) -> Result<String> {
                     let logs: Vec<String> = result
                         .lines()
                         .map(|line| {
-                            let str = format!("{} {}", line, chrono::Local::now());
+                            let str = format!("{} | {} | {}", name, line, chrono::Local::now());
                             str
                         })
                         .collect();
 
-                    file::append(&logs, cfg.path.join(name).join("hust.log"))?;
+                    file::append(&logs, cfg.path.join("hust.log"))?;
 
                     if let Err(err) = send_notification(
                         cfg.webhooks,

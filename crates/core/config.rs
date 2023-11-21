@@ -27,13 +27,9 @@ pub struct Cli {
 
 pub struct Config {
     pub quiet: bool,
-
     pub name: Option<String>,
-
     pub args: Vec<String>,
-
     pub path: PathBuf,
-
     pub webhooks: Vec<WebHook>,
 }
 
@@ -46,16 +42,18 @@ impl FromStr for WebHook {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.starts_with("https://discord.com/api/webhooks") {
-            Ok(WebHook::Discord(s.to_string()))
+        if s.trim().starts_with("https://discord.com/api/webhooks") {
+            Ok(WebHook::Discord(s.trim().to_string()))
         } else {
-            Err(format!("'{s}' is not a webhook!"))
+            Err(format!("'{s}' is not a WebHook!"))
         }
     }
 }
 
 impl Config {
     pub fn parse() -> Self {
+        let mut cli = Cli::parse();
+
         let mut file = String::new();
 
         // Read file
@@ -73,15 +71,16 @@ impl Config {
         let mut path = PathBuf::from(".");
         let mut webhooks = Vec::new();
 
+        // Parse file
         for line in file.split_whitespace() {
-            if line.trim().starts_with("https://discord.com/api/webhooks") {
-                webhooks.push(WebHook::Discord(line.trim().to_string()));
+            if let Ok(w) = WebHook::from_str(line) {
+                webhooks.push(w);
             } else {
                 path = PathBuf::from(line);
             }
         }
 
-        let mut cli = Cli::parse();
+        cli.webhooks.extend(webhooks);
 
         // Check if somthing is piped or not
         if !std::io::stdin().is_terminal() {
@@ -92,8 +91,6 @@ impl Config {
             let buf: Vec<_> = buf.split_whitespace().map(str::to_string).collect();
             cli.args.extend(buf);
         }
-
-        cli.webhooks.extend(webhooks);
 
         Self {
             quiet: cli.quiet,
