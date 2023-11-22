@@ -23,7 +23,7 @@ pub struct Cli {
 
     pub args: Vec<String>,
 
-    #[clap(short, long, help = "Set Default Path. saved in .hust.cfg")]
+    #[clap(long, help = "Set Default Path. saved in .hust.cfg")]
     pub path: Option<PathBuf>,
 
     #[clap(short, long, help = "WebHooks")]
@@ -98,10 +98,14 @@ impl Config {
 
         let mut path = match cli.path {
             Some(path) => {
-                if let Err(err) = write_path(&path) {
-                    eprintln!("{err}")
+                if path.is_dir() {
+                    if let Err(err) = write_path(&path) {
+                        eprintln!("{err}")
+                    }
+                    path
+                } else {
+                    ".".into()
                 }
-                path
             }
             None => ".".into(),
         };
