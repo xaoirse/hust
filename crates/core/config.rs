@@ -78,6 +78,14 @@ pub enum WebHook {
     Discord(String),
 }
 
+impl Display for WebHook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WebHook::Discord(url) => write!(f, "Discord => {}", url),
+        }
+    }
+}
+
 impl FromStr for WebHook {
     type Err = String;
 

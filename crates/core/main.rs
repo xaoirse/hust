@@ -72,12 +72,24 @@ fn run(cfg: Config) -> Result<String> {
             }
         }
     } else {
-        status()
+        status(cfg)
     }
 }
 
-fn status() -> Result<String> {
-    Ok("HOW YOU LIKE THAT?".to_string())
+fn status(cfg: Config) -> Result<String> {
+    let mut status = String::new();
+    status.push_str("Taste That PINK VENOM!");
+
+    status.push_str("\n\nPath: ");
+    status.push_str(&cfg.path.to_string_lossy());
+
+    status.push_str("\nWebhooks:");
+    for w in cfg.webhooks {
+        status.push('\n');
+        status.push_str(&w.to_string());
+    }
+
+    Ok(status)
 }
 fn search(find: &Find, path: &Path) -> Result<String> {
     let mut key = "";
