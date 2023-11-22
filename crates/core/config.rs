@@ -1,13 +1,14 @@
+use clap::{Parser, Subcommand};
 use std::{
     env::current_exe,
     fmt::Display,
     fs::read_to_string,
     io::{IsTerminal, Read},
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
 };
 
-use clap::{Parser, Subcommand};
+use crate::file;
 
 #[derive(Debug, Parser)]
 #[clap(name = "HUST", author, version, about, long_about = "Hunt Rust HUST")]
@@ -46,11 +47,15 @@ pub struct Find {
 
     #[clap(short, long, help = "Program")]
     pub program: Option<String>,
+
+    #[clap(short, default_value = "1000000000", long, help = "number of results")]
+    pub number: usize,
 }
 
 impl<T: AsRef<str> + Display> From<T> for Find {
     fn from(name: T) -> Self {
         Self {
+            number: 1000000000,
             verbose: 0,
             program: None,
             args: vec![name.to_string()],
@@ -89,25 +94,28 @@ impl Config {
     pub fn parse() -> Self {
         let mut cli = Cli::parse();
 
-        let mut file = String::new();
+        let mut config_file = String::new();
 
-        // Read file
-        if let Ok(p) = current_exe() {
-            if let Some(p) = p.parent() {
-                if let Ok(str) = read_to_string(p.join(".hust.cfg"))
-                    .or(read_to_string(p.join("$HOME/.config/hust/hust.cfg")))
-                    .or(read_to_string(p.join("$HOME/.hust.cfg")))
-                {
-                    file = str;
+        let mut path = match cli.path {
+            Some(path) => {
+                if let Err(err) = write_path(&path) {
+                    eprintln!("{err}")
                 }
+                path
+            }
+            None => ".".into(),
+        };
+
+        if let Some(file) = Self::get_config_file() {
+            if let Ok(str) = read_to_string(file) {
+                config_file = str
             }
         }
 
-        let mut path = PathBuf::from(".");
         let mut webhooks = Vec::new();
 
         // Parse file
-        for line in file.split_whitespace() {
+        for line in config_file.split_whitespace() {
             if let Ok(w) = WebHook::from_str(line) {
                 webhooks.push(w);
             } else {
@@ -132,9 +140,33 @@ impl Config {
             notification: cli.notification,
             name: cli.name,
             args: cli.args,
-            path: cli.path.unwrap_or(path),
+            path,
             webhooks: cli.webhooks,
             find: cli.find,
         }
+    }
+
+    pub fn get_config_file() -> Option<PathBuf> {
+        if let Ok(p) = current_exe() {
+            if let Some(p) = p.parent() {
+                if p.join(".hust.cfg").is_file() {
+                    return Some(p.join(".hust.cfg"));
+                } else if Path::new("$HOME/.config/hust/hust.cfg").is_file() {
+                    return Some(PathBuf::from("$HOME/.config/hust/hust.cfg"));
+                } else if Path::new("$HOME/.hust.cfg").is_file() {
+                    return Some(PathBuf::from("$HOME/.hust.cfg"));
+                }
+            }
+            return Some(p.join(".hust.cfg"));
+        }
+        None
+    }
+}
+
+pub fn write_path(path: &Path) -> crate::Result<()> {
+    if let Some(config_file) = Config::get_config_file() {
+        file::append(config_file, &[path.to_str().unwrap_or_default()])
+    } else {
+        Err("Can't get config file".into())
     }
 }

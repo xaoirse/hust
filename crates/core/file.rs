@@ -51,7 +51,7 @@ where
         .try_for_each(|line| writeln!(writer, "{}", line).map_err(|err| err.into()))
 }
 
-pub fn append<I, P, T, V>(iter: I, path: P) -> Result<()>
+pub fn append<I, P, T, V>(path: P, iter: I) -> Result<()>
 where
     I: Deref<Target = V>,
 
@@ -97,7 +97,7 @@ mod tests {
 
         file.write_all(b"a").unwrap();
 
-        super::append(&["b"], path).unwrap();
+        super::append(path, &["b"]).unwrap();
 
         let file = std::fs::read_to_string(path).unwrap();
 
@@ -116,7 +116,7 @@ mod tests {
 
         file.write_all(b"a\n").unwrap();
 
-        super::append(&["b"], path).unwrap();
+        super::append(path, &["b"]).unwrap();
 
         let file = std::fs::read_to_string(path).unwrap();
 

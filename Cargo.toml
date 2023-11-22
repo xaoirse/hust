@@ -17,8 +17,8 @@ addr = "*"
 openssl = { version = "*", features = ["vendored"] }
 reqwest = { version = "*", features = ["blocking", "json"] }
 chrono = "*"
-grep = "*"
 rayon = "*"
+rust_search = "2.0.0"
 
 [workspace]
 
@@ -30,12 +30,3 @@ path = "tests/first.rs"
 bench = false
 path = "crates/core/main.rs"
 name = "hust"
-
-[profile.dev]
-opt-level = 0
-
-[profile.release]
-opt-level = 3
-strip = true
-panic = "abort"
-codegen-units = 1

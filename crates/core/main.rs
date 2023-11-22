@@ -11,6 +11,7 @@ use database::DataBase as db;
 use notification::send_notification;
 
 use rayon::prelude::*;
+use std::io::{BufRead, BufReader};
 use std::{
     error::Error,
     fs,
@@ -21,8 +22,6 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 fn main() {
     let cfg = Config::parse();
-
-    set_path(&cfg.path).unwrap();
 
     match run(cfg) {
         Ok(result) => {
@@ -56,7 +55,7 @@ fn run(cfg: Config) -> Result<String> {
                         .map(|line| format!("{} | {} | {}", name, line, time))
                         .collect();
 
-                    file::append(&logs, cfg.path.join("hust.log"))?;
+                    file::append(cfg.path.join("hust.log"), &logs)?;
 
                     if !cfg.notification {
                         if let Err(err) = send_notification(
@@ -101,10 +100,9 @@ fn search(find: &Find, path: &Path) -> Result<String> {
                 true
             }
         })
-        .filter_map(|d| {
-            let program = d.file_name();
-
-            if let Ok(d) = fs::read_dir(d.path()) {
+        .filter_map(|de| {
+            if let Ok(d) = fs::read_dir(de.path()) {
+                let program = de.file_name().to_str().unwrap_or("").to_string();
                 Some(
                     d.par_bridge()
                         .filter_map(|d| d.ok())
@@ -115,21 +113,23 @@ fn search(find: &Find, path: &Path) -> Result<String> {
                                 d.file_name().to_string_lossy().eq(key)
                             }
                         })
-                        .filter_map(|d| fs::read_to_string(d.path()).ok())
-                        .flat_map(move |s| {
-                            s.par_lines()
+                        .filter_map(|d| std::fs::File::open(d.path()).ok())
+                        .flat_map_iter(|f| {
+                            BufReader::new(f)
+                                .lines()
+                                .map_while(std::result::Result::ok)
                                 .filter(|l| {
-                                    args.is_empty() || args.par_iter().any(|arg| l.contains(arg))
+                                    args.is_empty() || args.iter().any(|arg| l.contains(arg))
                                 })
                                 .map(|l| {
                                     if find.verbose == 0 {
                                         l.trim().to_string()
                                     } else {
-                                        format!("{} | {}", program.to_string_lossy(), l.trim())
+                                        format!("{} | {}", program, l.trim())
                                     }
                                 })
-                                .collect::<Vec<String>>()
-                        }),
+                        })
+                        .collect::<Vec<String>>(),
                 )
             } else {
                 None
@@ -147,8 +147,4 @@ fn insert(path: PathBuf, args: Vec<String>) -> Result<String> {
         .into_iter()
         .collect::<Vec<String>>()
         .join("\n"))
-}
-
-pub fn set_path(path: &Path) -> Result<()> {
-    file::save("./.hust.cfg", &[path.to_str().unwrap_or_default()])
 }
