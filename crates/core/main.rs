@@ -39,7 +39,7 @@ fn run(cfg: Config) -> Result<String> {
         return search(&find, &cfg.path);
     }
     if let Some(name) = &cfg.name {
-        if cfg.args.len().eq(&0) {
+        if cfg.args.len().eq(&0) && !cfg.piped {
             search(&Find::from(name), &cfg.path)
         } else {
             match insert(cfg.path.join(name), cfg.args) {

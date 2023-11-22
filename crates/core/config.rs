@@ -66,6 +66,7 @@ impl<T: AsRef<str> + Display> From<T> for Find {
 pub struct Config {
     pub quiet: bool,
     pub notification: bool,
+    pub piped: bool,
     pub name: Option<String>,
     pub args: Vec<String>,
     pub path: PathBuf,
@@ -137,6 +138,7 @@ impl Config {
 
         cli.webhooks.extend(webhooks);
 
+        let mut piped = false;
         // Check if somthing is piped or not
         if !std::io::stdin().is_terminal() {
             let mut buf = String::new();
@@ -145,11 +147,13 @@ impl Config {
                 .expect("Can't read from Stdin");
             let buf: Vec<_> = buf.split_whitespace().map(str::to_string).collect();
             cli.args.extend(buf);
+            piped = !piped;
         }
 
         Self {
             quiet: cli.quiet,
             notification: cli.notification,
+            piped,
             name: cli.name,
             args: cli.args,
             path,
