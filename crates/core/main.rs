@@ -11,10 +11,10 @@ use database::DataBase as db;
 use notification::send_notification;
 
 use rayon::prelude::*;
-use std::io::{BufRead, BufReader};
 use std::{
     error::Error,
     fs,
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
 };
 
@@ -88,6 +88,13 @@ fn status(cfg: Config) -> Result<String> {
         status.push('\n');
         status.push_str(&w.to_string());
     }
+    status.push_str("\nConfig file: ");
+    status.push_str(
+        Config::get_config_file()
+            .unwrap_or_default()
+            .to_str()
+            .unwrap_or("None"),
+    );
 
     Ok(status)
 }
