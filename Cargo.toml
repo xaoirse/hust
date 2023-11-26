@@ -19,6 +19,8 @@ reqwest = { version = "*", features = ["blocking", "json"] }
 chrono = "*"
 rayon = "*"
 rust_search = "2.0.0"
+memchr = "*"
+memmap2 = "*"
 
 [workspace]
 
