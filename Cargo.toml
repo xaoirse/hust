@@ -4,6 +4,9 @@ version = "0.0.4"
 edition = "2021"
 
 
+[workspace]
+
+
 [dependencies]
 tikv-jemallocator = "0.5.0"
 clap = { version = "*", features = [
@@ -21,8 +24,16 @@ rayon = "*"
 rust_search = "2.0.0"
 memchr = "*"
 memmap2 = "*"
+lexopt = "*"
 
-[workspace]
+
+[dev-dependencies]
+criterion = "0.3"
+
+
+[[bench]]
+name = "benchmark"
+harness = false
 
 [[test]]
 name = "first"

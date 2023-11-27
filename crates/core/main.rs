@@ -1,6 +1,7 @@
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
+mod args;
 mod config;
 mod database;
 mod file;
@@ -20,7 +21,10 @@ use std::{
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 fn main() {
+    println!("main   {}", chrono::Local::now().time());
+
     let cfg = Config::parse();
+    println!("cfg    {}", chrono::Local::now().time());
 
     match run(cfg) {
         Ok(result) => {
@@ -99,105 +103,6 @@ fn status(cfg: Config) -> Result<String> {
 
     Ok(status)
 }
-fn search(find: &Find, path: &Path) -> Result<String> {
-    let mut key = "*";
-    let mut args = find.args.as_slice();
-
-    if let Some((first, rest)) = find.args.split_first() {
-        if first == "ip" || first == "domain" || first == "other" {
-            key = first;
-            args = rest;
-        }
-    }
-
-    let mut result = Vec::new();
-    for entry in (fs::read_dir(path)?).flatten() {
-        if entry.path().is_file() {
-            continue;
-        }
-        if let Some(program) = &find.program {
-            if !entry.file_name().eq_ignore_ascii_case(program) {
-                continue;
-            }
-        }
-
-        for entry in (fs::read_dir(entry.path())?).flatten() {
-            if entry.path().is_dir() {
-                continue;
-            }
-
-            if let Ok(vec) = std::fs::read(entry.path()) {
-                let mut start = 0;
-                for arg in args {
-                    for end in memmem::find_iter(&vec, "\n") {
-                        if memmem::find(&vec[start..end], arg.as_bytes()).is_some() {
-                            if find.verbose == 0 {
-                                result.push(String::from_utf8_lossy(&vec[start..end]).to_string());
-                            } else {
-                                result.push(format!(
-                                    "{} | {}",
-                                    find.program.as_ref().unwrap_or(&"".to_string()),
-                                    String::from_utf8_lossy(&vec[start..end])
-                                ))
-                            }
-                        }
-                        start = end;
-                    }
-                }
-            }
-        }
-    }
-
-    // let result: Vec<String> = fs::read_dir(path)?
-    //     .par_bridge()
-    //     .filter_map(|d| d.ok())
-    //     .filter(|d| {
-    //         if let Some(p) = &find.program {
-    //             d.file_name().to_string_lossy().contains(p)
-    //         } else {
-    //             true
-    //         }
-    //     })
-    //     .filter_map(|de| {
-    //         if let Ok(d) = fs::read_dir(de.path()) {
-    //             let program = de.file_name().to_str().unwrap_or("").to_string();
-    //             Some(
-    //                 d.par_bridge()
-    //                     .filter_map(|d| d.ok())
-    //                     .filter(|d| {
-    //                         if key.is_empty() {
-    //                             true
-    //                         } else {
-    //                             d.file_name().to_string_lossy().eq(key)
-    //                         }
-    //                     })
-    //                     .filter_map(|d| std::fs::File::open(d.path()).ok())
-    //                     .flat_map_iter(|f| {
-    //                         BufReader::new(f)
-    //                             .lines()
-    //                             .map_while(std::result::Result::ok)
-    //                             .filter(|l| {
-    //                                 args.is_empty() || args.iter().any(|arg| l.contains(arg))
-    //                             })
-    //                             .map(|l| {
-    //                                 if find.verbose == 0 {
-    //                                     l.trim().to_string()
-    //                                 } else {
-    //                                     format!("{} | {}", program, l.trim())
-    //                                 }
-    //                             })
-    //                     })
-    //                     .collect::<Vec<String>>(),
-    //             )
-    //         } else {
-    //             None
-    //         }
-    //     })
-    //     .flatten()
-    //     .collect();
-
-    Ok(result.join("\n"))
-}
 
 fn insert(path: PathBuf, args: Vec<String>) -> Result<String> {
     Ok(db::from(args)
@@ -224,9 +129,9 @@ impl Memfind for Mmap {
 
             if self[i] == b'\n' {
                 if needles.is_empty()
-                    || needles.iter().any(|needle| {
-                        memchr::memmem::find(&self[start..i], needle.as_bytes()).is_some()
-                    })
+                    || needles
+                        .iter()
+                        .any(|needle| memmem::find(&self[start..i], needle.as_bytes()).is_some())
                 {
                     res.push(&self[start..i])
                 }
@@ -238,6 +143,8 @@ impl Memfind for Mmap {
     }
 }
 fn search2(find: &Find, path: &Path) {
+    println!("search {}", chrono::Local::now().time());
+
     let mut key = "*";
     let mut args = find.args.as_slice();
 
@@ -248,6 +155,7 @@ fn search2(find: &Find, path: &Path) {
         }
     }
 
+    println!("traver {}", chrono::Local::now().time());
     fs::read_dir(path)
         .unwrap()
         .flatten()
@@ -270,4 +178,6 @@ fn search2(find: &Find, path: &Path) {
                 println!("{}", String::from_utf8_lossy(f))
             }
         });
+
+    println!("traver {}", chrono::Local::now().time());
 }
