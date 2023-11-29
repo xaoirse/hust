@@ -5,7 +5,7 @@
 - [x] Log
 - [x] Notification for logs
 - [ ] resolveds -> domain.tld [127.0.0.1]
-- [x] Search
+- [x] Search (about x5 faster than ripgrep)
 - [ ] Status 
 - [ ] Tests
 - [ ] Telegram

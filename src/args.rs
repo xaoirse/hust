@@ -1,30 +1,38 @@
 use memmap2::MmapOptions;
-use std::ops::Deref;
 use std::{
+    borrow::Cow,
     env::current_exe,
     ffi::OsString,
     fs::{File, OpenOptions},
     io::IsTerminal,
+    os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
 };
 
-use crate::Result;
+use crate::{utils::TrimAsciiWhitespace, Result};
 
-/// Trait to allow trimming ascii whitespace from a &[u8].
-pub trait TrimAsciiWhitespace {
-    /// Trim ascii whitespace (based on `is_ascii_whitespace()`) from the
-    /// start and end of a slice.
-    fn trim_ascii_whitespace(&self) -> &[u8];
+pub enum Webhook {
+    Discord(OsString),
+}
+impl TryFrom<&[u8]> for Webhook {
+    type Error = ();
+
+    fn try_from(value: &[u8]) -> std::prelude::v1::Result<Self, Self::Error> {
+        if value.starts_with(b"https://discord.com/api/webhooks") {
+            Ok(Self::Discord(unsafe {
+                OsString::from_encoded_bytes_unchecked(value.trim_ascii_whitespace().to_vec())
+            }))
+        } else {
+            Err(())
+        }
+    }
 }
 
-impl<T: Deref<Target = [u8]>> TrimAsciiWhitespace for T {
-    fn trim_ascii_whitespace(&self) -> &[u8] {
-        let from = match self.iter().position(|x| !x.is_ascii_whitespace()) {
-            Some(i) => i,
-            None => return &self[0..0],
-        };
-        let to = self.iter().rposition(|x| !x.is_ascii_whitespace()).unwrap();
-        &self[from..=to]
+impl Webhook {
+    pub fn to_string_lossy(&self) -> Cow<'_, str> {
+        match self {
+            Webhook::Discord(url) => url.to_string_lossy(),
+        }
     }
 }
 
@@ -32,9 +40,11 @@ pub struct Args {
     pub quiet: bool,
     pub notification: bool,
     pub piped: bool,
+    pub verbosity: bool,
+    pub program: Option<OsString>,
     pub args: Vec<OsString>,
     pub path: PathBuf,
-    pub webhooks: Vec<OsString>,
+    pub webhooks: Vec<Webhook>,
 }
 impl Args {
     pub fn parse() -> Result<Self> {
@@ -43,18 +53,18 @@ impl Args {
         let mut quiet = false;
         let mut notification = false;
         let mut piped = false;
+        let mut verbosity = false;
+        let mut program = None;
         let mut args = Vec::new();
-        let mut path = PathBuf::new();
+        let mut path = PathBuf::from(".");
         let mut webhooks = Vec::new();
 
         // Parsing Config File
-        let mmap = unsafe { MmapOptions::new().map(&get_config_file()?).unwrap() };
+        let mmap = unsafe { MmapOptions::new().map(&get_config_file()?.1).unwrap() };
         for line in mmap.split(|c| *c == b'\n') {
             let line = line.trim_ascii_whitespace();
-            if line.starts_with(b"https://discord.com/api/webhooks") {
-                webhooks.push(unsafe {
-                    OsString::from_encoded_bytes_unchecked(line.trim_ascii_whitespace().to_vec())
-                });
+            if let Ok(webhook) = Webhook::try_from(line) {
+                webhooks.push(webhook);
             } else {
                 let line = unsafe {
                     OsString::from_encoded_bytes_unchecked(line.trim_ascii_whitespace().to_vec())
@@ -76,7 +86,13 @@ impl Args {
                 Short('n') | Long("notification") => {
                     notification = true;
                 }
-                Short('p') | Long("path") => {
+                Short('v') | Long("verbosity") => {
+                    verbosity = true;
+                }
+                Short('p') | Long("program") => {
+                    program = Some(parser.value()?);
+                }
+                Long("path") => {
                     let str: OsString = parser.value()?;
                     if Path::new(&str).is_dir() {
                         path = PathBuf::from(&str);
@@ -90,8 +106,18 @@ impl Args {
                 }
 
                 Short('w') | Long("webhooks") => {
-                    webhooks = parser.values()?.collect();
+                    webhooks = parser
+                        .values()?
+                        .flat_map(|str| match Webhook::try_from(str.as_bytes()) {
+                            Ok(wh) => Some(wh),
+                            Err(_) => {
+                                eprintln!("{str:?} is not a supported webhook");
+                                None
+                            }
+                        })
+                        .collect();
                 }
+
                 Value(val) => args.push(val),
                 Short('h') | Long("help") => {
                     println!("It's BLACK and it's PINK once the sun down...");
@@ -116,6 +142,8 @@ impl Args {
             quiet,
             notification,
             piped,
+            verbosity,
+            program,
             args,
             path,
             webhooks,
@@ -123,7 +151,7 @@ impl Args {
     }
 }
 
-fn get_config_file() -> Result<File> {
+pub fn get_config_file() -> Result<(PathBuf, File)> {
     let path = if let Ok(p) = current_exe() {
         if let Some(p) = p.parent() {
             if p.join(".hust.cfg").is_file() {
@@ -142,10 +170,12 @@ fn get_config_file() -> Result<File> {
         PathBuf::from(".hust.cfg")
     };
 
-    Ok(OpenOptions::new()
+    let file = OpenOptions::new()
         .read(true)
-        .truncate(true)
         .write(true)
+        .append(true)
         .create(true)
-        .open(path)?)
+        .open(&path)?;
+
+    Ok((path, file))
 }

@@ -1,16 +1,15 @@
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::error::Error;
 
-use rayon::prelude::*;
-
-use crate::config::WebHook;
+use crate::args::Webhook;
 use crate::Result;
 
-pub fn send_notification(webhooks: Vec<WebHook>, message: String) -> Result<String> {
+pub fn send_notification(webhooks: Vec<Webhook>, message: String) -> Result<String> {
     match webhooks
         .par_iter()
         .map(|webhook| match webhook {
-            WebHook::Discord(webhook) => send_discord_message(webhook, message.clone()),
+            Webhook::Discord(url) => send_discord_message(&url.to_string_lossy(), message.clone()),
         })
         .collect::<std::result::Result<String, Box<dyn Error + Send + Sync>>>()
     {
@@ -20,7 +19,7 @@ pub fn send_notification(webhooks: Vec<WebHook>, message: String) -> Result<Stri
 }
 
 fn send_discord_message(
-    webhook: &str,
+    url: &str,
     message: String,
 ) -> std::result::Result<String, Box<dyn Error + Send + Sync>> {
     let mut map = HashMap::new();
@@ -30,7 +29,7 @@ fn send_discord_message(
     let client = reqwest::blocking::Client::new();
 
     // Create a HTTP request.
-    let request = client.post(webhook).json(&map).build().unwrap();
+    let request = client.post(url).json(&map).build().unwrap();
 
     // Send the HTTP request and wait for the response.
     let response = client.execute(request)?.text()?;

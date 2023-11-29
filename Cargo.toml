@@ -1,6 +1,6 @@
 [package]
 name = "hust"
-version = "0.0.4"
+version = "0.0.5"
 edition = "2021"
 
 
@@ -8,23 +8,16 @@ edition = "2021"
 
 
 [dependencies]
-tikv-jemallocator = "0.5.0"
-clap = { version = "*", features = [
-    "derive",
-    "suggestions",
-    "color",
-    "wrap_help",
-] }
+tikv-jemallocator = "*"
 cidr-utils = "*"
 addr = "*"
-openssl = { version = "*", features = ["vendored"] }
-reqwest = { version = "*", features = ["blocking", "json"] }
+reqwest = { version = "*", features = ["default-tls", "blocking", "json"] }
 chrono = "*"
 rayon = "*"
-rust_search = "2.0.0"
 memchr = "*"
 memmap2 = "*"
 lexopt = "*"
+itertools = "*"
 
 
 [dev-dependencies]
@@ -39,7 +32,8 @@ harness = false
 name = "first"
 path = "tests/first.rs"
 
-[[bin]]
-bench = false
-path = "crates/core/main.rs"
-name = "hust"
+
+[profile.release]
+codegen-units = 1
+panic = "abort"
+lto = "fat"
