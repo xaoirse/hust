@@ -96,8 +96,42 @@ fn search(
     args: &[OsString],
     v: bool,
 ) -> Result<()> {
-    fs::read_dir(path)
-        .unwrap()
+    // for dir in fs::read_dir(path)? {
+    //     if let Ok(e) = dir {
+    //         if e.path().is_dir() {
+    //             if let (Some(prog), Some(path)) = (program, e.path().file_name()) {
+    //                 if memmem::find(path.as_bytes(), prog.as_bytes()).is_none() {
+    //                     continue;
+    //                 }
+
+    //                 if let Ok(e) = read_dir(e.path()) {
+    //                     for e in e {
+    //                         if let Ok(e) = e {
+    //                             if first.as_bytes() == b"*" || &e.file_name() == first {
+    //                                 if let Ok(f) = File::open(e.path()) {
+    //                                     let mmap = unsafe { MmapOptions::new().map(&f).unwrap() };
+    //                                     for f in mmap.find(args) {
+    //                                         if v {
+    //                                             println!(
+    //                                                 "{} {}",
+    //                                                 e.file_name().to_string_lossy(),
+    //                                                 String::from_utf8_lossy(f)
+    //                                             );
+    //                                         } else {
+    //                                             println!("{}", String::from_utf8_lossy(f));
+    //                                         }
+    //                                     }
+    //                                 }
+    //                             }
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+    fs::read_dir(path)?
         .flatten()
         .filter(|e| {
             e.path().is_dir()

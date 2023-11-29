@@ -1,17 +1,14 @@
-use addr::parse_dns_name;
 use cidr_utils::{cidr::IpCidr, utils::IpCidrCombiner};
+use fancy_regex::Regex;
 use itertools::Itertools;
 use std::{
     collections::HashSet,
     ffi::OsString,
     fmt::Display,
-    fs::File,
-    fs::OpenOptions,
-    io::Write,
-    io::{Read, Seek},
+    fs::{File, OpenOptions},
+    io::{Read, Seek, Write},
     os::unix::ffi::OsStrExt,
-    path::Path,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use crate::{utils::TrimAsciiWhitespace, Result};
@@ -46,6 +43,8 @@ impl DataBase {
     }
 
     pub fn import<'a>(&mut self, args: &'a [OsString]) -> Result<Vec<&'a OsString>> {
+        let r = Regex::new(r"^(?:(?!-|[^.]+_)[A-Za-z0-9-_]{1,63}(?<!-)(?:\.|$)){2,}$")?;
+
         let mut new = Vec::new();
 
         for arg in args {
@@ -58,15 +57,9 @@ impl DataBase {
                     self.ip.1.push(ip);
                     new.push(arg);
                 }
-            } else if let Ok(domain) =
-                parse_dns_name(unsafe { std::str::from_utf8_unchecked(arg.as_bytes()) })
-            {
-                if domain.is_icann() {
-                    if self.domain.1.insert(arg.clone()) {
-                        new.push(arg);
-                    }
-                } else if self.other.1.insert(arg.clone()) {
-                    new.push(arg)
+            } else if r.is_match(&arg.to_string_lossy())? {
+                if self.domain.1.insert(arg.clone()) {
+                    new.push(arg);
                 }
             } else if self.other.1.insert(arg.clone()) {
                 new.push(arg)

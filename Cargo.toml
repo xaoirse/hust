@@ -10,7 +10,6 @@ edition = "2021"
 [dependencies]
 tikv-jemallocator = "*"
 cidr-utils = "*"
-addr = "*"
 reqwest = { version = "*", features = ["default-tls", "blocking", "json"] }
 chrono = "*"
 rayon = "*"
@@ -18,6 +17,7 @@ memchr = "*"
 memmap2 = "*"
 lexopt = "*"
 itertools = "*"
+fancy-regex = "*"
 
 
 [dev-dependencies]
