@@ -1,8 +1,8 @@
 use memmap2::MmapOptions;
 use std::{
-    borrow::Cow,
     env::current_exe,
     ffi::OsString,
+    fmt::Display,
     fs::{File, OpenOptions},
     io::IsTerminal,
     os::unix::ffi::OsStrExt,
@@ -28,10 +28,10 @@ impl TryFrom<&[u8]> for Webhook {
     }
 }
 
-impl Webhook {
-    pub fn to_string_lossy(&self) -> Cow<'_, str> {
+impl Display for Webhook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Webhook::Discord(url) => url.to_string_lossy(),
+            Webhook::Discord(url) => write!(f, "Discord( {} )", url.to_string_lossy()),
         }
     }
 }

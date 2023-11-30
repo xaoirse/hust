@@ -1,6 +1,3 @@
-#[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
-
 mod args;
 mod database;
 mod notification;
@@ -42,7 +39,7 @@ fn run(args: Args) -> Result<()> {
             b"log" => todo!(), // TODO
             _ => {
                 match args.program {
-                    Some(program) => insert(args.path, program, &args.args, args.webhooks)?,
+                    Some(program) => insert(args.path, program, args.args, args.webhooks)?,
                     None => return Err("Program (-p) must be specified!".into()),
                 };
                 Ok(())
@@ -52,15 +49,26 @@ fn run(args: Args) -> Result<()> {
     }
 }
 
+const BANNER: &str = "
+    ██░ ██  █    ██   ██████ ▄▄▄█████▓
+    ▓██░ ██▒ ██  ▓██▒▒██    ▒ ▓  ██▒ ▓▒
+    ▒██▀▀██░▓██  ▒██░░ ▓██▄   ▒ ▓██░ ▒░
+    ░▓█ ░██ ▓▓█  ░██░  ▒   ██▒░ ▓██▓ ░ 
+    ░▓█▒░██▓▒▒█████▓ ▒██████▒▒  ▒██▒ ░ 
+    ▒ ░░▒░▒░▒▓▒ ▒ ▒ ▒ ▒▓▒ ▒ ░  ▒ ░░   
+    ▒ ░▒░ ░░░▒░ ░ ░ ░ ░▒  ░ ░    ░    
+    ░  ░░ ░ ░░░ ░ ░ ░  ░  ░    ░      
+    ░  ░  ░   ░           ░            
+";
 fn status(cfg: Args) -> Result<()> {
     let mut stdout = std::io::stdout();
     write!(
         stdout,
-        "Taste That PINK VENOM!\n\n  Hunt Path: {}\n\n   Webhooks: {}\n\nConfig file: {}",
+        "{}\n        Taste That PINK VENOM!    \n\nHunt Path: {}\n\nWebhooks: {}\n\nConfig file: {}",
+        BANNER,
         &cfg.path.to_string_lossy(),
         cfg.webhooks
             .iter()
-            .map(|w| w.to_string_lossy())
             .join("             \n"),
         args::get_config_file()?.0.to_string_lossy()
     )?;
@@ -71,21 +79,42 @@ fn status(cfg: Args) -> Result<()> {
 fn insert(
     path: PathBuf,
     program: OsString,
-    args: &[OsString],
+    args: Vec<OsString>,
     webhooks: Vec<Webhook>,
 ) -> Result<()> {
-    let mut db = db::init(path, &program)?;
-
-    send_notification(
-        webhooks,
-        db.import(args)?
-            .iter()
-            .map(|str| str.to_string_lossy())
-            .join("\n"),
-    )?;
+    let mut db = db::init(&path, &program)?.import(args);
 
     db.write()?;
 
+    let args = db.new.1;
+    if !args.is_empty() {
+        let append_res = utils::append(
+            path.join("hust.log"),
+            &args
+                .iter()
+                .map(|str| {
+                    format!(
+                        "{} | {} | {}",
+                        program.to_string_lossy(),
+                        str.to_string_lossy(),
+                        chrono::Local::now().to_rfc2822()
+                    )
+                })
+                .join("\n"),
+        );
+
+        let notif_res = send_notification(
+            webhooks,
+            format!(
+                "## {}\n{}",
+                args.iter().map(|str| str.to_string_lossy()).join("\n"),
+                program.to_string_lossy()
+            ),
+        );
+
+        append_res?;
+        notif_res?;
+    }
     Ok(())
 }
 
@@ -96,41 +125,6 @@ fn search(
     args: &[OsString],
     v: bool,
 ) -> Result<()> {
-    // for dir in fs::read_dir(path)? {
-    //     if let Ok(e) = dir {
-    //         if e.path().is_dir() {
-    //             if let (Some(prog), Some(path)) = (program, e.path().file_name()) {
-    //                 if memmem::find(path.as_bytes(), prog.as_bytes()).is_none() {
-    //                     continue;
-    //                 }
-
-    //                 if let Ok(e) = read_dir(e.path()) {
-    //                     for e in e {
-    //                         if let Ok(e) = e {
-    //                             if first.as_bytes() == b"*" || &e.file_name() == first {
-    //                                 if let Ok(f) = File::open(e.path()) {
-    //                                     let mmap = unsafe { MmapOptions::new().map(&f).unwrap() };
-    //                                     for f in mmap.find(args) {
-    //                                         if v {
-    //                                             println!(
-    //                                                 "{} {}",
-    //                                                 e.file_name().to_string_lossy(),
-    //                                                 String::from_utf8_lossy(f)
-    //                                             );
-    //                                         } else {
-    //                                             println!("{}", String::from_utf8_lossy(f));
-    //                                         }
-    //                                     }
-    //                                 }
-    //                             }
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-
     fs::read_dir(path)?
         .flatten()
         .filter(|e| {

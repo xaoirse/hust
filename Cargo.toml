@@ -2,13 +2,17 @@
 name = "hust"
 version = "0.0.5"
 edition = "2021"
-
-
-[workspace]
-
+authors = ["XAoirse <mxsadegh@gmail.com>"]
+description = "Hunt + Rust = HUST"
+documentation = "https://github.com/xaoirse/hust"
+homepage = "https://github.com/xaoirse/hust"
+repository = "https://github.com/xaoirse/hust"
+keywords = ["hunt", "hust", "rust"]
+categories = ["command-line-utilities", "text-processing"]
+license = "All Rights Resevrd"
+readme = "README.md"
 
 [dependencies]
-tikv-jemallocator = "*"
 cidr-utils = "*"
 reqwest = { version = "*", features = ["default-tls", "blocking", "json"] }
 chrono = "*"

@@ -8,7 +8,8 @@ use std::{
     fs::{File, OpenOptions},
     io::{Read, Seek, Write},
     os::unix::ffi::OsStrExt,
-    path::{Path, PathBuf},
+    path::Path,
+    rc::Rc,
 };
 
 use crate::{utils::TrimAsciiWhitespace, Result};
@@ -16,38 +17,36 @@ use crate::{utils::TrimAsciiWhitespace, Result};
 #[derive(Debug)]
 pub struct DataBase {
     ip: (File, IpCidrCombiner),
-    domain: (File, HashSet<OsString>),
-    other: (File, HashSet<OsString>),
+    domain: (File, HashSet<Rc<OsString>>),
+    other: (File, HashSet<Rc<OsString>>),
+    pub new: (File, HashSet<Rc<OsString>>),
 }
 
 impl DataBase {
-    pub fn init(path: PathBuf, program: &OsString) -> Result<Self> {
+    pub fn init(path: &Path, program: &OsString) -> Result<Self> {
         let path = path.join(program);
         std::fs::create_dir_all(&path)?;
 
         let (ip, ips) = file_lines(path.join("ip"))?;
         let (domain, domains) = file_lines(path.join("domain"))?;
         let (other, others) = file_lines(path.join("other"))?;
+        let new = OpenOptions::new().append(true).create(true).open(path)?;
 
-        let mut db = Self {
+        let db = Self {
             ip: (ip, IpCidrCombiner::new()),
             domain: (domain, HashSet::new()),
             other: (other, HashSet::new()),
+            new: (new, HashSet::new()),
         };
 
-        let _ = db.import(&ips);
-        let _ = db.import(&domains);
-        let _ = db.import(&others);
-
-        Ok(db)
+        Ok(db.import(ips).import(domains).import(others))
     }
 
-    pub fn import<'a>(&mut self, args: &'a [OsString]) -> Result<Vec<&'a OsString>> {
-        let r = Regex::new(r"^(?:(?!-|[^.]+_)[A-Za-z0-9-_]{1,63}(?<!-)(?:\.|$)){2,}$")?;
-
-        let mut new = Vec::new();
+    pub fn import(mut self, args: Vec<OsString>) -> Self {
+        let r = Regex::new(r"^(?:(?!-|[^.]+_)[A-Za-z0-9-_]{1,63}(?<!-)(?:\.|$)){2,}$").unwrap();
 
         for arg in args {
+            let arg = Rc::new(arg);
             if let Ok(ip) =
                 IpCidr::try_from(unsafe { std::str::from_utf8_unchecked(arg.as_bytes()) })
             {
@@ -55,18 +54,18 @@ impl DataBase {
                     && !self.ip.1.contains(ip.last_as_ip_addr())
                 {
                     self.ip.1.push(ip);
-                    new.push(arg);
+                    self.new.1.insert(arg);
                 }
-            } else if r.is_match(&arg.to_string_lossy())? {
-                if self.domain.1.insert(arg.clone()) {
-                    new.push(arg);
+            } else if r.is_match(&arg.to_string_lossy()).unwrap() {
+                if self.domain.1.insert(Rc::clone(&arg)) {
+                    self.new.1.insert(arg);
                 }
-            } else if self.other.1.insert(arg.clone()) {
-                new.push(arg)
+            } else if self.other.1.insert(Rc::clone(&arg)) {
+                self.new.1.insert(arg);
             }
         }
 
-        Ok(new)
+        self
     }
 
     pub fn write(&mut self) -> Result<()> {
