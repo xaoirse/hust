@@ -2,7 +2,7 @@
 name = "hust"
 version = "0.0.5"
 edition = "2021"
-authors = ["XAoirse <mxsadegh@gmail.com>"]
+authors = ["SA <mxsadegh@gmail.com>"]
 description = "Hunt + Rust = HUST"
 documentation = "https://github.com/xaoirse/hust"
 homepage = "https://github.com/xaoirse/hust"

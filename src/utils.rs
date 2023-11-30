@@ -1,14 +1,16 @@
 use crate::Result;
 
+use itertools::Itertools;
 use memchr::memmem;
 use memmap2::Mmap;
 use std::{
     ffi::OsString,
-    fs::OpenOptions,
+    fmt::Display,
+    fs::{File, OpenOptions},
     io::{Read, Seek, Write},
     ops::Deref,
     os::unix::ffi::OsStrExt,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 /// Trait to allow trimming ascii whitespace from a &[u8].
@@ -45,6 +47,39 @@ impl<'a> Memfind<'a> for Mmap {
             })
             .collect()
     }
+}
+
+pub fn file_lines(path: impl AsRef<Path>) -> Result<(File, Vec<OsString>)> {
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(path)?;
+
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf)?;
+
+    Ok((
+        file,
+        buf.trim_ascii_whitespace()
+            .split(|c| c == &b'\n')
+            .map(|line| unsafe {
+                OsString::from_encoded_bytes_unchecked(line.trim_ascii_whitespace().to_vec())
+            })
+            .filter(|l| !l.is_empty())
+            .collect(),
+    ))
+}
+
+pub fn force_write<I, T>(file: &mut File, iter: I) -> Result<()>
+where
+    I: IntoIterator<Item = T>,
+    T: Display,
+{
+    file.set_len(0)?;
+    file.seek(std::io::SeekFrom::Start(0))?;
+
+    Ok(file.write_all(iter.into_iter().join("\n").as_bytes())?)
 }
 
 pub fn append(path: PathBuf, str: &str) -> Result<()> {

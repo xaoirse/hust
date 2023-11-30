@@ -2,6 +2,7 @@ mod args;
 mod database;
 mod notification;
 mod utils;
+use cidr_utils::cidr::IpCidr;
 use utils::Memfind;
 
 use database::DataBase as db;
@@ -35,8 +36,8 @@ fn main() {
 fn run(args: Args) -> Result<()> {
     match args.args.split_first() {
         Some((first, rest)) => match first.as_bytes() {
-            b"ip" | b"domain" => search(&args.path, &args.program, first, rest, args.verbosity),
-            b"log" => todo!(), // TODO
+            b"domain" | b"ip" => search(&args.path, &args.program, first, rest, args.verbosity),
+            b"log" => todo!(), //TODO
             _ => {
                 match args.program {
                     Some(program) => insert(
@@ -89,7 +90,7 @@ fn insert(
     notification: bool,
     webhooks: Vec<Webhook>,
 ) -> Result<()> {
-    let mut db = db::init(&path, &program)?.import(args);
+    let mut db = db::init(&path, &program)?.import(args, true);
 
     db.write()?;
 
@@ -115,8 +116,8 @@ fn insert(
                 webhooks,
                 format!(
                     "## {}\n{}",
+                    program.to_string_lossy(),
                     args.iter().map(|str| str.to_string_lossy()).join("\n"),
-                    program.to_string_lossy()
                 ),
             )?;
         }
@@ -146,24 +147,57 @@ fn search(
         })
         .for_each(|program| {
             if let Ok(e) = read_dir(program.path()) {
-                e.flatten()
-                    .filter(|e| first.as_bytes() == b"*" || &e.file_name() == first)
-                    .flat_map(|e| File::open(e.path()))
-                    .for_each(|f| {
+                let iter = e.flatten().filter(|e| &e.file_name() == first);
+                if first == "domain" {
+                    iter.flat_map(|e| File::open(e.path())).for_each(|f| {
                         let mmap = unsafe { MmapOptions::new().map(&f).unwrap() };
 
-                        for f in mmap.find(args) {
+                        for arg in mmap.find(args) {
                             if v {
                                 println!(
                                     "{} | {}",
                                     program.file_name().to_string_lossy(),
-                                    String::from_utf8_lossy(f)
+                                    String::from_utf8_lossy(arg)
                                 );
                             } else {
-                                println!("{}", String::from_utf8_lossy(f));
+                                println!("{}", String::from_utf8_lossy(arg));
                             }
                         }
                     });
+                } else {
+                    // Search in CIDRs
+                    iter.flat_map(|e| File::open(e.path())).for_each(|f| {
+                        let mmap = unsafe { MmapOptions::new().map(&f).unwrap() };
+
+                        let args = args
+                            .iter()
+                            .filter_map(|arg| IpCidr::from_str(arg.to_string_lossy()).ok())
+                            .collect_vec();
+
+                        for line in mmap.find(&[]) {
+                            if let Ok(cidr) =
+                                IpCidr::from_str(unsafe { std::str::from_utf8_unchecked(line) })
+                            {
+                                for arg in args.iter() {
+                                    if cidr.contains(arg.first_as_ip_addr())
+                                        || cidr.contains(arg.last_as_ip_addr())
+                                    {
+                                        if v {
+                                            println!(
+                                                "{} | {} | {}",
+                                                program.file_name().to_string_lossy(),
+                                                cidr,
+                                                arg
+                                            );
+                                        } else {
+                                            println!("{}", cidr);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
             }
         });
 
