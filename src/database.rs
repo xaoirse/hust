@@ -24,13 +24,17 @@ pub struct DataBase {
 
 impl DataBase {
     pub fn init(path: &Path, program: &OsString) -> Result<Self> {
+        let new = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(path.join("hust.log"))?;
+
         let path = path.join(program);
         std::fs::create_dir_all(&path)?;
 
         let (ip, ips) = file_lines(path.join("ip"))?;
         let (domain, domains) = file_lines(path.join("domain"))?;
         let (other, others) = file_lines(path.join("other"))?;
-        let new = OpenOptions::new().append(true).create(true).open(path)?;
 
         let db = Self {
             ip: (ip, IpCidrCombiner::new()),

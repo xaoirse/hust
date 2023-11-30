@@ -39,7 +39,13 @@ fn run(args: Args) -> Result<()> {
             b"log" => todo!(), // TODO
             _ => {
                 match args.program {
-                    Some(program) => insert(args.path, program, args.args, args.webhooks)?,
+                    Some(program) => insert(
+                        args.path,
+                        program,
+                        args.args,
+                        args.notification,
+                        args.webhooks,
+                    )?,
                     None => return Err("Program (-p) must be specified!".into()),
                 };
                 Ok(())
@@ -80,6 +86,7 @@ fn insert(
     path: PathBuf,
     program: OsString,
     args: Vec<OsString>,
+    notification: bool,
     webhooks: Vec<Webhook>,
 ) -> Result<()> {
     let mut db = db::init(&path, &program)?.import(args);
@@ -103,17 +110,18 @@ fn insert(
                 .join("\n"),
         );
 
-        let notif_res = send_notification(
-            webhooks,
-            format!(
-                "## {}\n{}",
-                args.iter().map(|str| str.to_string_lossy()).join("\n"),
-                program.to_string_lossy()
-            ),
-        );
+        if !notification {
+            send_notification(
+                webhooks,
+                format!(
+                    "## {}\n{}",
+                    args.iter().map(|str| str.to_string_lossy()).join("\n"),
+                    program.to_string_lossy()
+                ),
+            )?;
+        }
 
         append_res?;
-        notif_res?;
     }
     Ok(())
 }
@@ -147,7 +155,7 @@ fn search(
                         for f in mmap.find(args) {
                             if v {
                                 println!(
-                                    "{} {}",
+                                    "{} | {}",
                                     program.file_name().to_string_lossy(),
                                     String::from_utf8_lossy(f)
                                 );

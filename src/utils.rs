@@ -36,6 +36,7 @@ pub trait Memfind<'a> {
 impl<'a> Memfind<'a> for Mmap {
     fn find(&'a self, needles: &[OsString]) -> Vec<&[u8]> {
         self.split(|c| c == &b'\n')
+            .filter(|l| !l.trim_ascii_whitespace().is_empty())
             .filter(|line| {
                 needles.is_empty()
                     || needles
