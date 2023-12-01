@@ -9,7 +9,6 @@ use database::DataBase as db;
 
 use args::{Args, Webhook};
 use itertools::Itertools;
-use memchr::memmem;
 use memmap2::MmapOptions;
 use notification::send_notification;
 
@@ -139,9 +138,7 @@ fn search(
         .filter(|e| {
             e.path().is_dir()
                 && match (program, e.path().file_name()) {
-                    (Some(program), Some(path)) => {
-                        memmem::find(path.as_bytes(), program.as_bytes()).is_some()
-                    }
+                    (Some(program), Some(path)) => program == path,
                     _ => true,
                 }
         })
